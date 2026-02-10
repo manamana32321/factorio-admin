@@ -11,8 +11,10 @@ const SCREENSHOT_FILE = "admin-screenshot.png";
 
 // POST: trigger screenshot capture via RCON
 export async function POST() {
+  console.log("[screenshot] POST called");
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
+    console.log("[screenshot] no session — 401");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const user = await prisma.user.findUnique({
@@ -20,13 +22,11 @@ export async function POST() {
     select: { role: true },
   });
   if (user?.role !== "admin") {
+    console.log("[screenshot] not admin — 403, role:", user?.role);
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 
   try {
-    // Headless servers have no player camera, so we must specify surface + position explicitly.
-    // surface=game.surfaces[1] is "nauvis" (the default map).
-    // zoom=0.5 gives a good overview; position defaults to spawn (0,0).
     const luaCmd = [
       `game.take_screenshot{`,
       `surface=game.surfaces[1],`,
@@ -40,13 +40,24 @@ export async function POST() {
       `}`,
     ].join(" ");
 
+    console.log("[screenshot] sending RCON command");
     const response = await sendCommand(`/sc ${luaCmd}`);
+    console.log("[screenshot] RCON response:", JSON.stringify(response));
 
     // Wait for file to be written to disk
     await new Promise((r) => setTimeout(r, 2000));
 
+    const filePath = join(SCRIPT_OUTPUT, SCREENSHOT_FILE);
+    try {
+      const info = await stat(filePath);
+      console.log("[screenshot] file exists, size:", info.size);
+    } catch {
+      console.log("[screenshot] file NOT found at:", filePath);
+    }
+
     return NextResponse.json({ ok: true, rconResponse: response });
   } catch (err) {
+    console.log("[screenshot] error:", String(err));
     return NextResponse.json(
       { error: "Screenshot failed", detail: String(err) },
       { status: 503 }
