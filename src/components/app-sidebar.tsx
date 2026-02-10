@@ -5,6 +5,7 @@ import {
   Terminal,
   Users,
   Save,
+  Archive,
   LogOut,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +30,7 @@ const navItems = [
   { title: "콘솔", href: "/dashboard/console", icon: Terminal },
   { title: "플레이어", href: "/dashboard/players", icon: Users },
   { title: "세이브", href: "/dashboard/saves", icon: Save },
+  { title: "백업", href: "/dashboard/backups", icon: Archive },
 ];
 
 export function AppSidebar() {

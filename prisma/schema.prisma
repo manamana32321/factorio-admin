@@ -74,18 +74,6 @@ model Verification {
   @@map("verification")
 }
 
-// Factorio save backups
-model SaveBackup {
-  id        String   @id @default(cuid())
-  filename  String
-  size      Int
-  type      String   // auto | manual
-  createdAt DateTime @default(now())
-  note      String?
-
-  @@map("save_backup")
-}
-
 // RCON command history
 model RconLog {
   id        String   @id @default(cuid())
