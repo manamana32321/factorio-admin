@@ -34,6 +34,7 @@ import {
   Pencil,
   Check,
   X,
+  Play,
 } from "lucide-react";
 
 interface SaveFile {
@@ -68,6 +69,7 @@ export default function SavesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [loadTarget, setLoadTarget] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
@@ -172,6 +174,29 @@ export default function SavesPage() {
     } finally {
       setActionLoading(null);
       setRenaming(null);
+    }
+  };
+
+  const handleLoad = async () => {
+    if (!loadTarget) return;
+    setActionLoading(loadTarget);
+    setLoadTarget(null);
+    try {
+      const res = await fetch("/api/rcon/saves/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: loadTarget }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage(data.message || "서버 재시작 중...");
+      } else {
+        setMessage(data.error || "로드 실패");
+      }
+    } catch {
+      setMessage("서버 연결 실패");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -284,6 +309,7 @@ export default function SavesPage() {
             onRenameConfirm={handleRename}
             onRenameCancel={() => setRenaming(null)}
             onDelete={setDeleteTarget}
+            onLoad={setLoadTarget}
             emptyMessage={
               saves.length === 0
                 ? "PVC 마운트 대기 중..."
@@ -315,6 +341,7 @@ export default function SavesPage() {
             onRenameConfirm={handleRename}
             onRenameCancel={() => setRenaming(null)}
             onDelete={setDeleteTarget}
+            onLoad={setLoadTarget}
             emptyMessage="오토세이브가 없습니다."
             showAutoBadge
           />
@@ -349,6 +376,32 @@ export default function SavesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Load Confirm Dialog */}
+      <AlertDialog
+        open={!!loadTarget}
+        onOpenChange={(open) => !open && setLoadTarget(null)}
+      >
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-50">
+              세이브 로드
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              <strong>{loadTarget}</strong> 세이브로 서버를 재시작하시겠습니까?
+              현재 접속 중인 플레이어가 모두 끊어집니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-800 text-zinc-300 border-zinc-700">
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleLoad}>
+              재시작
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -364,6 +417,7 @@ function SaveTable({
   onRenameConfirm,
   onRenameCancel,
   onDelete,
+  onLoad,
   emptyMessage,
   showAutoBadge,
 }: {
@@ -377,6 +431,7 @@ function SaveTable({
   onRenameConfirm: (oldName: string) => void;
   onRenameCancel: () => void;
   onDelete: (name: string) => void;
+  onLoad: (name: string) => void;
   emptyMessage: string;
   showAutoBadge?: boolean;
 }) {
@@ -387,7 +442,7 @@ function SaveTable({
           <TableHead className="text-zinc-400">이름</TableHead>
           <TableHead className="text-zinc-400 w-28">크기</TableHead>
           <TableHead className="text-zinc-400 w-40">수정일</TableHead>
-          {isAdmin && <TableHead className="text-zinc-400 w-32" />}
+          {isAdmin && <TableHead className="text-zinc-400 w-40" />}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -443,6 +498,15 @@ function SaveTable({
             {isAdmin && (
               <TableCell>
                 <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="이 세이브로 서버 시작"
+                    onClick={() => onLoad(save.name)}
+                    disabled={actionLoading === save.name}
+                  >
+                    <Play className="h-4 w-4 text-green-400" />
+                  </Button>
                   <a
                     href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
                     download
