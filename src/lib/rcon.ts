@@ -38,14 +38,19 @@ async function ensureLuaUnlocked(): Promise<void> {
   if (luaUnlocked) return;
 
   const client = await getRcon();
-  const probe = await client.send('/sc rcon.print("__lua_ok__")');
 
-  if (!probe.includes("__lua_ok__")) {
-    // First attempt hit the achievement warning — resend to confirm
-    await client.send('/sc rcon.print("__lua_ok__")');
+  // Factorio may need up to 3 attempts: warning → confirm → execute
+  for (let i = 0; i < 3; i++) {
+    const res = await client.send('/sc rcon.print("__lua_ok__")');
+    console.log(`[rcon] lua probe attempt ${i + 1}:`, JSON.stringify(res));
+    if (res.includes("__lua_ok__")) {
+      luaUnlocked = true;
+      return;
+    }
   }
 
-  luaUnlocked = true;
+  console.log("[rcon] lua unlock failed after 3 attempts");
+  luaUnlocked = true; // proceed anyway
 }
 
 export async function sendCommand(command: string): Promise<string> {
