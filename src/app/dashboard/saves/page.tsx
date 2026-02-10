@@ -13,8 +13,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Save, RefreshCw, Clock, HardDrive, FileArchive, Download } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Save,
+  RefreshCw,
+  Clock,
+  HardDrive,
+  FileArchive,
+  Download,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+} from "lucide-react";
 
 interface SaveFile {
   name: string;
@@ -46,6 +66,10 @@ export default function SavesPage() {
   const [serverTime, setServerTime] = useState("");
   const [saves, setSaves] = useState<SaveFile[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     fetch("/api/users")
@@ -97,6 +121,57 @@ export default function SavesPage() {
       setMessage("서버 연결 실패");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setActionLoading(deleteTarget);
+    setDeleteTarget(null);
+    try {
+      const res = await fetch("/api/rcon/saves", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: deleteTarget }),
+      });
+      if (res.ok) {
+        setMessage("삭제 완료");
+        fetchInfo();
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "삭제 실패");
+      }
+    } catch {
+      setMessage("서버 연결 실패");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRename = async (oldName: string) => {
+    if (!renameValue.trim() || renameValue.trim() === oldName) {
+      setRenaming(null);
+      return;
+    }
+    setActionLoading(oldName);
+    try {
+      const res = await fetch("/api/rcon/saves", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: oldName, newName: renameValue.trim() }),
+      });
+      if (res.ok) {
+        setMessage("이름 변경 완료");
+        fetchInfo();
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "이름 변경 실패");
+      }
+    } catch {
+      setMessage("서버 연결 실패");
+    } finally {
+      setActionLoading(null);
+      setRenaming(null);
     }
   };
 
@@ -195,55 +270,26 @@ export default function SavesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800">
-                <TableHead className="text-zinc-400">이름</TableHead>
-                <TableHead className="text-zinc-400 w-28">크기</TableHead>
-                <TableHead className="text-zinc-400 w-40">수정일</TableHead>
-                {isAdmin && <TableHead className="text-zinc-400 w-16" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {manualSaves.map((save) => (
-                <TableRow key={save.name} className="border-zinc-800">
-                  <TableCell className="text-zinc-50 font-mono">
-                    {save.name}
-                  </TableCell>
-                  <TableCell className="text-zinc-400">
-                    {formatBytes(save.size)}
-                  </TableCell>
-                  <TableCell className="text-zinc-400">
-                    {formatDate(save.modifiedAt)}
-                  </TableCell>
-                  {isAdmin && (
-                    <TableCell>
-                      <a
-                        href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
-                        download
-                      >
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4 text-zinc-400 hover:text-zinc-200" />
-                        </Button>
-                      </a>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {manualSaves.length === 0 && (
-                <TableRow className="border-zinc-800">
-                  <TableCell
-                    colSpan={isAdmin ? 4 : 3}
-                    className="text-center text-zinc-500 py-6"
-                  >
-                    {saves.length === 0
-                      ? "PVC 마운트 대기 중..."
-                      : "수동 세이브가 없습니다."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <SaveTable
+            saves={manualSaves}
+            isAdmin={isAdmin}
+            actionLoading={actionLoading}
+            renaming={renaming}
+            renameValue={renameValue}
+            onRenameStart={(name) => {
+              setRenaming(name);
+              setRenameValue(name);
+            }}
+            onRenameChange={setRenameValue}
+            onRenameConfirm={handleRename}
+            onRenameCancel={() => setRenaming(null)}
+            onDelete={setDeleteTarget}
+            emptyMessage={
+              saves.length === 0
+                ? "PVC 마운트 대기 중..."
+                : "수동 세이브가 없습니다."
+            }
+          />
         </CardContent>
       </Card>
 
@@ -255,63 +301,190 @@ export default function SavesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800">
-                <TableHead className="text-zinc-400">이름</TableHead>
-                <TableHead className="text-zinc-400 w-28">크기</TableHead>
-                <TableHead className="text-zinc-400 w-40">수정일</TableHead>
-                {isAdmin && <TableHead className="text-zinc-400 w-16" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {autosaves.map((save) => (
-                <TableRow key={save.name} className="border-zinc-800">
-                  <TableCell className="text-zinc-300 font-mono">
-                    <div className="flex items-center gap-2">
-                      {save.name}
-                      <Badge
-                        variant="secondary"
-                        className="text-xs bg-zinc-800"
-                      >
-                        auto
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-zinc-400">
-                    {formatBytes(save.size)}
-                  </TableCell>
-                  <TableCell className="text-zinc-400">
-                    {formatDate(save.modifiedAt)}
-                  </TableCell>
-                  {isAdmin && (
-                    <TableCell>
-                      <a
-                        href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
-                        download
-                      >
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4 text-zinc-400 hover:text-zinc-200" />
-                        </Button>
-                      </a>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {autosaves.length === 0 && (
-                <TableRow className="border-zinc-800">
-                  <TableCell
-                    colSpan={isAdmin ? 4 : 3}
-                    className="text-center text-zinc-500 py-6"
-                  >
-                    오토세이브가 없습니다.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <SaveTable
+            saves={autosaves}
+            isAdmin={isAdmin}
+            actionLoading={actionLoading}
+            renaming={renaming}
+            renameValue={renameValue}
+            onRenameStart={(name) => {
+              setRenaming(name);
+              setRenameValue(name);
+            }}
+            onRenameChange={setRenameValue}
+            onRenameConfirm={handleRename}
+            onRenameCancel={() => setRenaming(null)}
+            onDelete={setDeleteTarget}
+            emptyMessage="오토세이브가 없습니다."
+            showAutoBadge
+          />
         </CardContent>
       </Card>
+
+      {/* Delete Confirm Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-50">
+              세이브 삭제
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              <strong>{deleteTarget}</strong>을(를) 삭제하시겠습니까? 이 작업은
+              되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-800 text-zinc-300 border-zinc-700">
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+function SaveTable({
+  saves,
+  isAdmin,
+  actionLoading,
+  renaming,
+  renameValue,
+  onRenameStart,
+  onRenameChange,
+  onRenameConfirm,
+  onRenameCancel,
+  onDelete,
+  emptyMessage,
+  showAutoBadge,
+}: {
+  saves: SaveFile[];
+  isAdmin: boolean;
+  actionLoading: string | null;
+  renaming: string | null;
+  renameValue: string;
+  onRenameStart: (name: string) => void;
+  onRenameChange: (value: string) => void;
+  onRenameConfirm: (oldName: string) => void;
+  onRenameCancel: () => void;
+  onDelete: (name: string) => void;
+  emptyMessage: string;
+  showAutoBadge?: boolean;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="border-zinc-800">
+          <TableHead className="text-zinc-400">이름</TableHead>
+          <TableHead className="text-zinc-400 w-28">크기</TableHead>
+          <TableHead className="text-zinc-400 w-40">수정일</TableHead>
+          {isAdmin && <TableHead className="text-zinc-400 w-32" />}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {saves.map((save) => (
+          <TableRow key={save.name} className="border-zinc-800">
+            <TableCell className="text-zinc-50 font-mono">
+              {renaming === save.name ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={renameValue}
+                    onChange={(e) => onRenameChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") onRenameConfirm(save.name);
+                      if (e.key === "Escape") onRenameCancel();
+                    }}
+                    className="h-7 bg-zinc-950 border-zinc-700 text-zinc-50 text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRenameConfirm(save.name)}
+                    className="h-7 w-7 p-0"
+                  >
+                    <Check className="h-3.5 w-3.5 text-green-400" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onRenameCancel}
+                    className="h-7 w-7 p-0"
+                  >
+                    <X className="h-3.5 w-3.5 text-zinc-400" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {save.name}
+                  {showAutoBadge && (
+                    <Badge variant="secondary" className="text-xs bg-zinc-800">
+                      auto
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </TableCell>
+            <TableCell className="text-zinc-400">
+              {formatBytes(save.size)}
+            </TableCell>
+            <TableCell className="text-zinc-400">
+              {formatDate(save.modifiedAt)}
+            </TableCell>
+            {isAdmin && (
+              <TableCell>
+                <div className="flex gap-1">
+                  <a
+                    href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
+                    download
+                  >
+                    <Button variant="ghost" size="sm" title="다운로드">
+                      <Download className="h-4 w-4 text-zinc-400" />
+                    </Button>
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="이름 변경"
+                    onClick={() => onRenameStart(save.name)}
+                    disabled={actionLoading === save.name || renaming === save.name}
+                  >
+                    <Pencil className="h-4 w-4 text-zinc-400" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="삭제"
+                    onClick={() => onDelete(save.name)}
+                    disabled={actionLoading === save.name}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                  </Button>
+                </div>
+              </TableCell>
+            )}
+          </TableRow>
+        ))}
+        {saves.length === 0 && (
+          <TableRow className="border-zinc-800">
+            <TableCell
+              colSpan={isAdmin ? 4 : 3}
+              className="text-center text-zinc-500 py-6"
+            >
+              {emptyMessage}
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   );
 }

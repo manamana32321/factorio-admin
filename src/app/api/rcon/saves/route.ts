@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendCommand } from "@/lib/rcon";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
-import { readdir, stat } from "fs/promises";
+import { readdir, stat, rename, unlink } from "fs/promises";
 import { join } from "path";
 
 const SAVES_PATH = process.env.FACTORIO_SAVES_PATH || "/factorio/saves";
@@ -56,6 +57,21 @@ async function listSaves(): Promise<SaveFile[]> {
   }
 }
 
+async function requireAdmin() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (user?.role !== "admin") return null;
+  return session;
+}
+
+function sanitizeName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
@@ -77,8 +93,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        // Sanitize save name
-        const safe = saveName.replace(/[^a-zA-Z0-9_-]/g, "");
+        const safe = sanitizeName(saveName);
         if (!safe) {
           return NextResponse.json(
             { error: "Invalid save name" },
@@ -100,5 +115,65 @@ export async function POST(request: NextRequest) {
       { error: "RCON connection failed" },
       { status: 503 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const { name } = await request.json();
+  if (!name || typeof name !== "string") {
+    return NextResponse.json({ error: "name required" }, { status: 400 });
+  }
+
+  const safe = sanitizeName(name);
+  if (!safe) {
+    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  }
+
+  try {
+    await unlink(join(SAVES_PATH, `${safe}.zip`));
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Delete save failed:", err);
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const { name, newName } = await request.json();
+  if (!name || !newName || typeof name !== "string" || typeof newName !== "string") {
+    return NextResponse.json({ error: "name and newName required" }, { status: 400 });
+  }
+
+  const safeOld = sanitizeName(name);
+  const safeNew = sanitizeName(newName);
+  if (!safeOld || !safeNew) {
+    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  }
+
+  try {
+    const oldPath = join(SAVES_PATH, `${safeOld}.zip`);
+    const newPath = join(SAVES_PATH, `${safeNew}.zip`);
+
+    // Check new name doesn't already exist
+    try {
+      await stat(newPath);
+      return NextResponse.json({ error: "Name already exists" }, { status: 409 });
+    } catch {
+      // Expected — file doesn't exist
+    }
+
+    await rename(oldPath, newPath);
+    return NextResponse.json({ success: true, name: safeNew });
+  } catch (err) {
+    console.error("Rename save failed:", err);
+    return NextResponse.json({ error: "Rename failed" }, { status: 500 });
   }
 }
