@@ -67,7 +67,7 @@ export default function ConsolePage() {
       addLog("error", "서버 연결 실패");
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
 

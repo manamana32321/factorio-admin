@@ -22,7 +22,7 @@ export function ServerStatusCard() {
       }
     };
     fetchInfo();
-    const interval = setInterval(fetchInfo, 30000);
+    const interval = setInterval(fetchInfo, 10000);
     return () => clearInterval(interval);
   }, []);
 

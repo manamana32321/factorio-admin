@@ -10,10 +10,9 @@ export async function GET() {
   }
 
   try {
-    // Factorio doesn't have a native "list saves" RCON command,
-    // but we can get the current save name from server info
-    const info = await sendCommand("/version");
-    return NextResponse.json({ info });
+    const version = await sendCommand("/version");
+    const time = await sendCommand("/time");
+    return NextResponse.json({ version: version.trim(), time: time.trim() });
   } catch {
     return NextResponse.json(
       { error: "RCON connection failed" },
@@ -36,14 +35,22 @@ export async function POST(request: NextRequest) {
       case "save":
         response = await sendCommand("/server-save");
         break;
-      case "load":
-        if (!saveName) {
+      case "save-as":
+        if (!saveName || typeof saveName !== "string") {
           return NextResponse.json(
             { error: "saveName required" },
             { status: 400 }
           );
         }
-        response = await sendCommand(`/server-save ${saveName}`);
+        // Sanitize save name
+        const safe = saveName.replace(/[^a-zA-Z0-9_-]/g, "");
+        if (!safe) {
+          return NextResponse.json(
+            { error: "Invalid save name" },
+            { status: 400 }
+          );
+        }
+        response = await sendCommand(`/server-save ${safe}`);
         break;
       default:
         return NextResponse.json(
@@ -52,7 +59,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    return NextResponse.json({ response });
+    return NextResponse.json({ response: response.trim() });
   } catch {
     return NextResponse.json(
       { error: "RCON connection failed" },
