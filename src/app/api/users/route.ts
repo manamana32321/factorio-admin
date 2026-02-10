@@ -61,6 +61,14 @@ export async function PATCH(request: NextRequest) {
 
   const updates: Record<string, unknown> = {};
 
+  // Prevent self-demotion
+  if (role && role !== "admin" && userId === session.user.id) {
+    return NextResponse.json(
+      { error: "자기 자신을 강등할 수 없습니다" },
+      { status: 400 }
+    );
+  }
+
   // Role change -> sync with RCON
   if (role && role !== target.role) {
     updates.role = role;
