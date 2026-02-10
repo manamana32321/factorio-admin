@@ -14,7 +14,7 @@ export default function LoginPage() {
   const handleGitHubLogin = () => {
     authClient.signIn.social({
       provider: "github",
-      callbackURL: "/dashboard",
+      callbackURL: "/dashboard?welcome=true",
     });
   };
 

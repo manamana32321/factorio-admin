@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { requireSession } from "@/lib/session";
+import { FactorioNicknameNudge } from "@/components/factorio-nickname-nudge";
 
 export default async function DashboardLayout({
   children,
@@ -16,6 +18,9 @@ export default async function DashboardLayout({
         <div className="flex items-center border-b border-zinc-800 px-4 py-2">
           <SidebarTrigger className="text-zinc-400" />
         </div>
+        <Suspense>
+          <FactorioNicknameNudge />
+        </Suspense>
         <div className="p-6">{children}</div>
       </main>
     </SidebarProvider>
