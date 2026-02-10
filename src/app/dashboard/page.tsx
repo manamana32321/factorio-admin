@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,17 +35,17 @@ export default function DashboardPage() {
       .catch(() => setIsAdmin(false));
   }, []);
 
-  // Load existing screenshot on mount
-  useEffect(() => {
-    loadScreenshot();
-  }, []);
+  const capturingRef = useRef(false);
 
-  const loadScreenshot = async () => {
+  const loadScreenshot = useCallback(async () => {
     try {
       const res = await fetch("/api/rcon/screenshot");
       if (res.ok) {
         const blob = await res.blob();
-        setScreenshotUrl(URL.createObjectURL(blob));
+        setScreenshotUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
         setScreenshotTime(res.headers.get("X-Screenshot-Time"));
         setScreenshotError(null);
       } else {
@@ -54,15 +54,16 @@ export default function DashboardPage() {
     } catch {
       setScreenshotError("로드 실패");
     }
-  };
+  }, []);
 
-  const captureScreenshot = async () => {
+  const captureAndLoad = useCallback(async () => {
+    if (capturingRef.current) return;
+    capturingRef.current = true;
     setCapturing(true);
     setScreenshotError(null);
     try {
       const res = await fetch("/api/rcon/screenshot", { method: "POST" });
       if (res.ok) {
-        // Wait a moment then load the new screenshot
         await new Promise((r) => setTimeout(r, 500));
         await loadScreenshot();
       } else {
@@ -73,8 +74,21 @@ export default function DashboardPage() {
       setScreenshotError("서버 연결 실패");
     } finally {
       setCapturing(false);
+      capturingRef.current = false;
     }
-  };
+  }, [loadScreenshot]);
+
+  // Load existing screenshot on mount
+  useEffect(() => {
+    loadScreenshot();
+  }, [loadScreenshot]);
+
+  // Auto-capture every 3 minutes when server is online
+  useEffect(() => {
+    if (!online || !isAdmin) return;
+    const interval = setInterval(captureAndLoad, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [online, isAdmin, captureAndLoad]);
 
   return (
     <div className="space-y-6">
@@ -122,7 +136,7 @@ export default function DashboardPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={captureScreenshot}
+                onClick={captureAndLoad}
                 disabled={capturing || !online}
               >
                 {capturing ? (
