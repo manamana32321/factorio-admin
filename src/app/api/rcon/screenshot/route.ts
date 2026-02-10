@@ -24,19 +24,31 @@ export async function POST() {
   }
 
   try {
-    // Use silent-command to take screenshot via Lua API
-    // Resolution 1920x1080, no GUI overlay, save to known filename
-    await sendCommand(
-      `/sc game.take_screenshot{resolution={x=1920, y=1080}, show_gui=false, show_entity_info=false, path="${SCREENSHOT_FILE}"}`
-    );
+    // Headless servers have no player camera, so we must specify surface + position explicitly.
+    // surface=game.surfaces[1] is "nauvis" (the default map).
+    // zoom=0.5 gives a good overview; position defaults to spawn (0,0).
+    const luaCmd = [
+      `game.take_screenshot{`,
+      `surface=game.surfaces[1],`,
+      `position={x=0, y=0},`,
+      `resolution={x=1920, y=1080},`,
+      `zoom=0.5,`,
+      `show_gui=false,`,
+      `show_entity_info=false,`,
+      `anti_alias=true,`,
+      `path="${SCREENSHOT_FILE}"`,
+      `}`,
+    ].join(" ");
 
-    // Wait briefly for file to be written
-    await new Promise((r) => setTimeout(r, 1500));
+    const response = await sendCommand(`/sc ${luaCmd}`);
 
-    return NextResponse.json({ ok: true });
-  } catch {
+    // Wait for file to be written to disk
+    await new Promise((r) => setTimeout(r, 2000));
+
+    return NextResponse.json({ ok: true, rconResponse: response });
+  } catch (err) {
     return NextResponse.json(
-      { error: "Screenshot failed" },
+      { error: "Screenshot failed", detail: String(err) },
       { status: 503 }
     );
   }
