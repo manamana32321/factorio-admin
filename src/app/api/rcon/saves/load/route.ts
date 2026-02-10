@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
-import { stat, utimes } from "fs/promises";
+import { stat, open } from "fs/promises";
 import { join } from "path";
 import { readFileSync } from "fs";
 
@@ -60,8 +60,13 @@ export async function POST(request: NextRequest) {
 
   try {
     // Touch save file → becomes the most recent
-    const now = new Date();
-    await utimes(savePath, now, now);
+    // Note: utimes with explicit times requires file ownership (EPERM for non-owner).
+    // Instead, read+write 1 byte in-place to update mtime via write permission.
+    const fh = await open(savePath, "r+");
+    const buf = Buffer.alloc(1);
+    await fh.read(buf, 0, 1, 0);
+    await fh.write(buf, 0, 1, 0);
+    await fh.close();
 
     // Find Factorio server pod
     const listRes = await k8sFetch(
