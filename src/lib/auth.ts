@@ -12,4 +12,22 @@ export const auth = betterAuth({
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     },
   },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          // First user to register becomes admin automatically
+          const adminCount = await prisma.user.count({
+            where: { role: "admin" },
+          });
+          if (adminCount === 0) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { role: "admin" },
+            });
+          }
+        },
+      },
+    },
+  },
 });
