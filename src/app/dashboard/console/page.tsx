@@ -73,6 +73,7 @@ export default function ConsolePage() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      e.preventDefault();
       sendCommand();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();

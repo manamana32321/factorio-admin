@@ -1,34 +1,76 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, RefreshCw, Clock, Info } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Save, RefreshCw, Clock, HardDrive, FileArchive, Download } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+
+interface SaveFile {
+  name: string;
+  size: number;
+  modifiedAt: string;
+  isAutosave: boolean;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function SavesPage() {
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [message, setMessage] = useState("");
   const [serverTime, setServerTime] = useState("");
+  const [saves, setSaves] = useState<SaveFile[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const fetchInfo = async () => {
+  useEffect(() => {
+    fetch("/api/users")
+      .then((res) => setIsAdmin(res.ok))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  const fetchInfo = useCallback(async () => {
     try {
       const res = await fetch("/api/rcon/saves");
       if (res.ok) {
         const data = await res.json();
         setServerTime(data.time || "");
+        setSaves(data.saves || []);
       }
     } catch {
       /* ignore */
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchInfo();
     const interval = setInterval(fetchInfo, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchInfo]);
 
   const triggerSave = async (action: "save" | "save-as") => {
     if (action === "save-as" && !saveName.trim()) return;
@@ -47,6 +89,7 @@ export default function SavesPage() {
       if (res.ok) {
         setMessage("저장 완료");
         if (action === "save-as") setSaveName("");
+        fetchInfo();
       } else {
         setMessage(data.error || "저장 실패");
       }
@@ -57,53 +100,67 @@ export default function SavesPage() {
     }
   };
 
+  const manualSaves = saves.filter((s) => !s.isAutosave);
+  const autosaves = saves.filter((s) => s.isAutosave);
+  const totalSize = saves.reduce((sum, s) => sum + s.size, 0);
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-zinc-50">세이브 관리</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-zinc-50">세이브 관리</h2>
+        <Button variant="ghost" size="sm" onClick={fetchInfo}>
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+      </div>
 
-      {/* Server Time */}
-      {serverTime && (
+      {/* Summary */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {serverTime && (
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardContent className="flex items-center gap-2 pt-6">
+              <Clock className="h-4 w-4 text-zinc-400" />
+              <span className="text-zinc-300 text-sm">{serverTime}</span>
+            </CardContent>
+          </Card>
+        )}
         <Card className="bg-zinc-900 border-zinc-800">
           <CardContent className="flex items-center gap-2 pt-6">
-            <Clock className="h-4 w-4 text-zinc-400" />
-            <span className="text-zinc-300">게임 시간: {serverTime}</span>
+            <FileArchive className="h-4 w-4 text-zinc-400" />
+            <span className="text-zinc-300 text-sm">
+              세이브 {saves.length}개
+            </span>
           </CardContent>
         </Card>
-      )}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardContent className="flex items-center gap-2 pt-6">
+            <HardDrive className="h-4 w-4 text-zinc-400" />
+            <span className="text-zinc-300 text-sm">
+              총 {formatBytes(totalSize)}
+            </span>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Quick Save */}
+      {/* Actions */}
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
-          <CardTitle className="text-zinc-50">빠른 저장</CardTitle>
+          <CardTitle className="text-zinc-50">저장</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button
-            onClick={() => triggerSave("save")}
-            disabled={saving}
-          >
-            {saving ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            현재 상태 저장
-          </Button>
-          {message && (
-            <p
-              className={`text-sm ${message.includes("완료") ? "text-green-400" : "text-red-400"}`}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => triggerSave("save")}
+              disabled={saving}
+              variant="secondary"
             >
-              {message}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Named Save */}
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardHeader>
-          <CardTitle className="text-zinc-50">이름 지정 저장</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+              {saving ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              빠른 저장
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Input
               value={saveName}
@@ -117,22 +174,142 @@ export default function SavesPage() {
               disabled={saving || !saveName.trim()}
             >
               <Save className="mr-2 h-4 w-4" />
-              저장
+              이름 지정 저장
             </Button>
           </div>
+          {message && (
+            <p
+              className={`text-sm ${message.includes("완료") ? "text-green-400" : "text-red-400"}`}
+            >
+              {message}
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Info */}
+      {/* Manual Saves */}
       <Card className="bg-zinc-900 border-zinc-800">
-        <CardContent className="flex items-start gap-2 pt-6">
-          <Info className="h-4 w-4 text-zinc-500 mt-0.5" />
-          <div className="text-sm text-zinc-500 space-y-1">
-            <p>자동 저장: 활성화 (autosave_slots: 20)</p>
-            <p>
-              세이브 파일 목록 조회는 PVC 마운트가 필요합니다 (추후 지원 예정).
-            </p>
-          </div>
+        <CardHeader>
+          <CardTitle className="text-zinc-50">
+            수동 세이브 ({manualSaves.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800">
+                <TableHead className="text-zinc-400">이름</TableHead>
+                <TableHead className="text-zinc-400 w-28">크기</TableHead>
+                <TableHead className="text-zinc-400 w-40">수정일</TableHead>
+                {isAdmin && <TableHead className="text-zinc-400 w-16" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {manualSaves.map((save) => (
+                <TableRow key={save.name} className="border-zinc-800">
+                  <TableCell className="text-zinc-50 font-mono">
+                    {save.name}
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {formatBytes(save.size)}
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {formatDate(save.modifiedAt)}
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <a
+                        href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
+                        download
+                      >
+                        <Button variant="ghost" size="sm">
+                          <Download className="h-4 w-4 text-zinc-400 hover:text-zinc-200" />
+                        </Button>
+                      </a>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+              {manualSaves.length === 0 && (
+                <TableRow className="border-zinc-800">
+                  <TableCell
+                    colSpan={isAdmin ? 4 : 3}
+                    className="text-center text-zinc-500 py-6"
+                  >
+                    {saves.length === 0
+                      ? "PVC 마운트 대기 중..."
+                      : "수동 세이브가 없습니다."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Autosaves */}
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-zinc-50">
+            오토세이브 ({autosaves.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800">
+                <TableHead className="text-zinc-400">이름</TableHead>
+                <TableHead className="text-zinc-400 w-28">크기</TableHead>
+                <TableHead className="text-zinc-400 w-40">수정일</TableHead>
+                {isAdmin && <TableHead className="text-zinc-400 w-16" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {autosaves.map((save) => (
+                <TableRow key={save.name} className="border-zinc-800">
+                  <TableCell className="text-zinc-300 font-mono">
+                    <div className="flex items-center gap-2">
+                      {save.name}
+                      <Badge
+                        variant="secondary"
+                        className="text-xs bg-zinc-800"
+                      >
+                        auto
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {formatBytes(save.size)}
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {formatDate(save.modifiedAt)}
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <a
+                        href={`/api/rcon/saves/download?name=${encodeURIComponent(save.name)}`}
+                        download
+                      >
+                        <Button variant="ghost" size="sm">
+                          <Download className="h-4 w-4 text-zinc-400 hover:text-zinc-200" />
+                        </Button>
+                      </a>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+              {autosaves.length === 0 && (
+                <TableRow className="border-zinc-800">
+                  <TableCell
+                    colSpan={isAdmin ? 4 : 3}
+                    className="text-center text-zinc-500 py-6"
+                  >
+                    오토세이브가 없습니다.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
