@@ -62,16 +62,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const tmpDir = `/tmp/fpreview-${name}`;
     const cmd = [
       "sh",
       "-c",
-      `mkdir -p /tmp/fpreview "${PREVIEWS_DIR}" && \
-printf '[path]\\nread-data=/opt/factorio/data\\nwrite-data=/tmp/fpreview\\n' > /tmp/fpreview/config.ini && \
+      `mkdir -p "${tmpDir}" "${PREVIEWS_DIR}" && \
+printf '[path]\\nread-data=/opt/factorio/data\\nwrite-data=${tmpDir}\\n' > "${tmpDir}/config.ini" && \
 /opt/factorio/bin/x64/factorio \
-  --config /tmp/fpreview/config.ini \
+  --config "${tmpDir}/config.ini" \
   --generate-map-preview "${PREVIEWS_DIR}/${name}.png" \
   --map-preview-size ${PREVIEW_SIZE} \
-  "${savePath}" 2>&1`,
+  "${savePath}" 2>&1 ; rm -rf "${tmpDir}"`,
     ];
 
     const { stdout, stderr } = await k8sExec(podName, cmd);
