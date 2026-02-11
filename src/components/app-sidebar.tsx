@@ -6,6 +6,7 @@ import {
   Users,
   Save,
   Archive,
+  BarChart3,
   LogOut,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,6 +32,7 @@ const navItems = [
   { title: "플레이어", href: "/dashboard/players", icon: Users },
   { title: "세이브", href: "/dashboard/saves", icon: Save },
   { title: "백업", href: "/dashboard/backups", icon: Archive },
+  { title: "메트릭", href: "/dashboard/metrics", icon: BarChart3 },
 ];
 
 export function AppSidebar() {

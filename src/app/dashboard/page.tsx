@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ServerStatusCard } from "@/components/server-status";
+import { MetricsCharts } from "@/components/metrics-charts";
 export default function DashboardPage() {
   const [online, setOnline] = useState<boolean | null>(null);
 
@@ -44,6 +45,8 @@ export default function DashboardPage() {
         </Card>
         <ServerStatusCard />
       </div>
+
+      <MetricsCharts />
     </div>
   );
 }
