@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { stat, readFile, mkdir } from "fs/promises";
+import { stat, readFile } from "fs/promises";
 import { join } from "path";
 import { getFactorioPod, k8sExec } from "@/lib/k8s";
 
@@ -54,8 +54,6 @@ export async function GET(request: NextRequest) {
 
   // Generate preview via K8s exec on factorio server pod
   try {
-    await mkdir(PREVIEWS_DIR, { recursive: true });
-
     const podName = await getFactorioPod();
     if (!podName) {
       return NextResponse.json(
@@ -67,7 +65,7 @@ export async function GET(request: NextRequest) {
     const cmd = [
       "sh",
       "-c",
-      `mkdir -p /tmp/fpreview && \
+      `mkdir -p /tmp/fpreview "${PREVIEWS_DIR}" && \
 printf '[path]\\nread-data=/opt/factorio/data\\nwrite-data=/tmp/fpreview\\n' > /tmp/fpreview/config.ini && \
 /opt/factorio/bin/x64/factorio \
   --config /tmp/fpreview/config.ini \
