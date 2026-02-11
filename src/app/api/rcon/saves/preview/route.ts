@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       "sh",
       "-c",
       `mkdir -p /tmp/fpreview && \
-printf '[path]\\nwrite-data=/tmp/fpreview\\n' > /tmp/fpreview/config.ini && \
+printf '[path]\\nread-data=/opt/factorio/data\\nwrite-data=/tmp/fpreview\\n' > /tmp/fpreview/config.ini && \
 /opt/factorio/bin/x64/factorio \
   --config /tmp/fpreview/config.ini \
   --generate-map-preview "${PREVIEWS_DIR}/${name}.png" \
