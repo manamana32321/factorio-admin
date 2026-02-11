@@ -35,7 +35,9 @@ import {
   Check,
   X,
   Play,
+  Map,
 } from "lucide-react";
+import Image from "next/image";
 
 interface SaveFile {
   name: string;
@@ -406,6 +408,42 @@ export default function SavesPage() {
   );
 }
 
+function PreviewThumbnail({ name }: { name: string }) {
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  if (error) {
+    return (
+      <div className="w-12 h-12 bg-zinc-800 rounded flex items-center justify-center shrink-0">
+        <Map className="h-5 w-5 text-zinc-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-12 h-12 bg-zinc-800 rounded overflow-hidden shrink-0 relative">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <RefreshCw className="h-4 w-4 text-zinc-600 animate-spin" />
+        </div>
+      )}
+      <Image
+        src={`/api/rcon/saves/preview?name=${encodeURIComponent(name)}`}
+        alt={`${name} map preview`}
+        width={48}
+        height={48}
+        className="w-full h-full object-cover"
+        unoptimized
+        onLoad={() => setLoading(false)}
+        onError={() => {
+          setError(true);
+          setLoading(false);
+        }}
+      />
+    </div>
+  );
+}
+
 function SaveTable({
   saves,
   isAdmin,
@@ -449,45 +487,51 @@ function SaveTable({
         {saves.map((save) => (
           <TableRow key={save.name} className="border-zinc-800">
             <TableCell className="text-zinc-50 font-mono">
-              {renaming === save.name ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    value={renameValue}
-                    onChange={(e) => onRenameChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") onRenameConfirm(save.name);
-                      if (e.key === "Escape") onRenameCancel();
-                    }}
-                    className="h-7 bg-zinc-950 border-zinc-700 text-zinc-50 text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRenameConfirm(save.name)}
-                    className="h-7 w-7 p-0"
-                  >
-                    <Check className="h-3.5 w-3.5 text-green-400" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onRenameCancel}
-                    className="h-7 w-7 p-0"
-                  >
-                    <X className="h-3.5 w-3.5 text-zinc-400" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {save.name}
-                  {showAutoBadge && (
-                    <Badge variant="secondary" className="text-xs bg-zinc-800">
-                      auto
-                    </Badge>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                <PreviewThumbnail name={save.name} />
+                {renaming === save.name ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={renameValue}
+                      onChange={(e) => onRenameChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onRenameConfirm(save.name);
+                        if (e.key === "Escape") onRenameCancel();
+                      }}
+                      className="h-7 bg-zinc-950 border-zinc-700 text-zinc-50 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRenameConfirm(save.name)}
+                      className="h-7 w-7 p-0"
+                    >
+                      <Check className="h-3.5 w-3.5 text-green-400" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onRenameCancel}
+                      className="h-7 w-7 p-0"
+                    >
+                      <X className="h-3.5 w-3.5 text-zinc-400" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {save.name}
+                    {showAutoBadge && (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs bg-zinc-800"
+                      >
+                        auto
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
             </TableCell>
             <TableCell className="text-zinc-400">
               {formatBytes(save.size)}

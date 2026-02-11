@@ -4,11 +4,10 @@ import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { stat, open } from "fs/promises";
 import { join } from "path";
-import { readFileSync } from "fs";
+import { getFactorioPod, k8sFetch } from "@/lib/k8s";
 
 const SAVES_PATH = process.env.FACTORIO_SAVES_PATH || "/factorio/saves";
 const NAMESPACE = "factorio";
-const POD_LABEL = process.env.FACTORIO_POD_LABEL || "app=factorio-factorio-server-charts";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -19,20 +18,6 @@ async function requireAdmin() {
   });
   if (user?.role !== "admin") return null;
   return session;
-}
-
-function getToken() {
-  return readFileSync("/var/run/secrets/kubernetes.io/serviceaccount/token", "utf8");
-}
-
-async function k8sFetch(path: string, options: RequestInit = {}) {
-  return fetch(`https://kubernetes.default.svc${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-      ...options.headers,
-    },
-  });
 }
 
 export async function POST(request: NextRequest) {
@@ -69,28 +54,25 @@ export async function POST(request: NextRequest) {
     await fh.close();
 
     // Find Factorio server pod
-    const listRes = await k8sFetch(
-      `/api/v1/namespaces/${NAMESPACE}/pods?labelSelector=${encodeURIComponent(POD_LABEL)}`
-    );
-    if (!listRes.ok) {
-      console.error("K8s list pods failed:", await listRes.text());
-      return NextResponse.json({ error: "Failed to find server pod" }, { status: 500 });
-    }
-
-    const pods = await listRes.json();
-    if (!pods.items?.length) {
-      return NextResponse.json({ error: "Server pod not found" }, { status: 404 });
+    const podName = await getFactorioPod();
+    if (!podName) {
+      return NextResponse.json(
+        { error: "Server pod not found" },
+        { status: 404 }
+      );
     }
 
     // Delete pod → Deployment recreates it → loads latest (touched) save
-    const podName = pods.items[0].metadata.name;
     const deleteRes = await k8sFetch(
       `/api/v1/namespaces/${NAMESPACE}/pods/${podName}`,
       { method: "DELETE" }
     );
     if (!deleteRes.ok) {
       console.error("K8s delete pod failed:", await deleteRes.text());
-      return NextResponse.json({ error: "Failed to restart server" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to restart server" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
