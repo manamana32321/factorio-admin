@@ -411,6 +411,9 @@ export default function SavesPage() {
 function PreviewThumbnail({ name }: { name: string }) {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  const previewUrl = `/api/rcon/saves/preview?name=${encodeURIComponent(name)}`;
 
   if (error) {
     return (
@@ -421,26 +424,59 @@ function PreviewThumbnail({ name }: { name: string }) {
   }
 
   return (
-    <div className="w-12 h-12 bg-zinc-800 rounded overflow-hidden shrink-0 relative">
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <RefreshCw className="h-4 w-4 text-zinc-600 animate-spin" />
+    <>
+      <button
+        type="button"
+        onClick={() => !loading && setExpanded(true)}
+        className="w-12 h-12 bg-zinc-800 rounded overflow-hidden shrink-0 relative cursor-pointer hover:ring-2 hover:ring-zinc-600 transition-shadow"
+      >
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <RefreshCw className="h-4 w-4 text-zinc-600 animate-spin" />
+          </div>
+        )}
+        <Image
+          src={previewUrl}
+          alt={`${name} map preview`}
+          width={48}
+          height={48}
+          className="w-full h-full object-cover"
+          unoptimized
+          onLoad={() => setLoading(false)}
+          onError={() => {
+            setError(true);
+            setLoading(false);
+          }}
+        />
+      </button>
+
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setExpanded(false)}
+          onKeyDown={(e) => e.key === "Escape" && setExpanded(false)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <Image
+              src={previewUrl}
+              alt={`${name} map preview`}
+              width={512}
+              height={512}
+              className="rounded-lg max-w-[90vw] max-h-[90vh] object-contain"
+              unoptimized
+            />
+            <p className="text-center text-zinc-400 text-sm mt-2 font-mono">{name}</p>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center text-zinc-400"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
-      <Image
-        src={`/api/rcon/saves/preview?name=${encodeURIComponent(name)}`}
-        alt={`${name} map preview`}
-        width={48}
-        height={48}
-        className="w-full h-full object-cover"
-        unoptimized
-        onLoad={() => setLoading(false)}
-        onError={() => {
-          setError(true);
-          setLoading(false);
-        }}
-      />
-    </div>
+    </>
   );
 }
 
