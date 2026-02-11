@@ -84,6 +84,6 @@ export function k8sExec(
         settled = true;
         reject(new Error("K8s exec timeout"));
       }
-    }, 30_000);
+    }, 60_000);
   });
 }
