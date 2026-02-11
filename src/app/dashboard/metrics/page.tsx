@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatName, getIconUrl } from "@/lib/factorio-locale";
 
 type TimeRange = "1h" | "6h" | "24h" | "7d";
 type Category = "item" | "fluid" | "power" | "kill";
@@ -116,9 +117,13 @@ export default function MetricsExplorerPage() {
     return () => clearInterval(interval);
   }, [selected, range, cat.production]);
 
-  const filtered = labels.filter((l) =>
-    l.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = labels.filter((l) => {
+    const q = search.toLowerCase();
+    return (
+      l.toLowerCase().includes(q) ||
+      formatName(l).toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -180,13 +185,23 @@ export default function MetricsExplorerPage() {
               <button
                 key={label}
                 onClick={() => setSelected(label)}
-                className={`w-full text-left px-3 py-1.5 text-sm rounded ${
+                className={`w-full text-left px-3 py-1.5 text-sm rounded flex items-center gap-2 ${
                   selected === label
                     ? "bg-zinc-700 text-zinc-100"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                 }`}
               >
-                {label.replace(/-/g, " ")}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={getIconUrl(label)}
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="shrink-0"
+                  loading="lazy"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+                <span className="truncate">{formatName(label)}</span>
               </button>
             ))}
           </div>
@@ -195,10 +210,16 @@ export default function MetricsExplorerPage() {
         {/* Chart */}
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">
-              {selected
-                ? `${cat.label}: ${selected.replace(/-/g, " ")}`
-                : `${cat.label} 선택해주세요`}
+            <CardTitle className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+              {selected ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={getIconUrl(selected)} alt="" width={20} height={20} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  {cat.label}: {formatName(selected)}
+                </>
+              ) : (
+                `${cat.label} 선택해주세요`
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -227,7 +248,7 @@ export default function MetricsExplorerPage() {
                         fontSize: "12px",
                       }}
                       labelFormatter={(v) => new Date(v).toLocaleString("ko-KR")}
-                      formatter={(v: number) => [v.toLocaleString(), selected]}
+                      formatter={(v: number) => [v.toLocaleString(), selected ? formatName(selected) : selected]}
                     />
                     <Line
                       type="monotone"
