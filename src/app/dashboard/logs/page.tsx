@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type EventType = "" | "chat" | "join" | "leave" | "research" | "rocket" | "save";
 type TimeRange = "1h" | "6h" | "24h" | "7d";
@@ -64,7 +65,6 @@ interface LogEntry {
 function parseLogEntry(ts: string, line: string): LogEntry {
   const timestamp = new Date(Number(ts) / 1_000_000).toISOString();
 
-  // Try to parse as JSON (OTel structured metadata)
   try {
     const parsed = JSON.parse(line);
     return {
@@ -77,8 +77,6 @@ function parseLogEntry(ts: string, line: string): LogEntry {
       raw: line,
     };
   } catch {
-    // Plain text body from OTel — the body IS the event type
-    // Attributes may not be in the line itself
     const event = line.trim();
     return { timestamp, event, raw: line };
   }
@@ -114,9 +112,24 @@ function renderEventDetail(entry: LogEntry): string {
   }
 }
 
+/** Check if an entry matches the search query (case-insensitive). */
+function matchesSearch(entry: LogEntry, q: string): boolean {
+  if (!q) return true;
+  const lower = q.toLowerCase();
+  return (
+    (entry.player?.toLowerCase().includes(lower) ?? false) ||
+    (entry.message?.toLowerCase().includes(lower) ?? false) ||
+    (entry.tech?.toLowerCase().includes(lower) ?? false) ||
+    (entry.name?.toLowerCase().includes(lower) ?? false) ||
+    entry.event.toLowerCase().includes(lower)
+  );
+}
+
 export default function LogsPage() {
   const [eventFilter, setEventFilter] = useState<EventType>("");
   const [range, setRange] = useState<TimeRange>("1h");
+  const [search, setSearch] = useState("");
+  const [playerFilter, setPlayerFilter] = useState("");
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -139,11 +152,9 @@ export default function LogsPage() {
 
       const parsed: LogEntry[] = [];
       for (const stream of data.data.result) {
-        // Stream labels may contain structured metadata
         const streamLabels = stream.stream || {};
         for (const [ts, line] of stream.values as [string, string][]) {
           const entry = parseLogEntry(ts, line);
-          // Merge stream labels into entry if attributes came as labels
           if (streamLabels.event && !entry.event) entry.event = streamLabels.event;
           if (streamLabels.player && !entry.player) entry.player = streamLabels.player;
           if (streamLabels.message && !entry.message) entry.message = streamLabels.message;
@@ -153,7 +164,6 @@ export default function LogsPage() {
         }
       }
 
-      // Sort newest first (Loki already returns backward, but merge streams)
       parsed.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       setEntries(parsed);
     } finally {
@@ -166,6 +176,23 @@ export default function LogsPage() {
     const interval = setInterval(fetchLogs, 10000);
     return () => clearInterval(interval);
   }, [fetchLogs]);
+
+  // Unique players for the player filter dropdown
+  const players = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of entries) {
+      if (e.player) set.add(e.player);
+    }
+    return Array.from(set).sort();
+  }, [entries]);
+
+  // Client-side filtering (search + player)
+  const filtered = useMemo(() => {
+    return entries.filter((e) => {
+      if (playerFilter && e.player !== playerFilter) return false;
+      return matchesSearch(e, search);
+    });
+  }, [entries, search, playerFilter]);
 
   return (
     <div className="space-y-6">
@@ -208,18 +235,53 @@ export default function LogsPage() {
         </div>
       </div>
 
+      {/* Search + player filter */}
+      <div className="flex flex-wrap gap-3">
+        <Input
+          placeholder="검색 (플레이어, 메시지, 기술...)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="bg-zinc-900 border-zinc-800 text-zinc-200 max-w-xs"
+        />
+        {players.length > 0 && (
+          <select
+            value={playerFilter}
+            onChange={(e) => setPlayerFilter(e.target.value)}
+            className="rounded-md bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm px-3 py-2"
+          >
+            <option value="">모든 플레이어</option>
+            {players.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        )}
+        {(search || playerFilter) && (
+          <button
+            onClick={() => { setSearch(""); setPlayerFilter(""); }}
+            className="text-sm text-zinc-500 hover:text-zinc-300 px-2"
+          >
+            초기화
+          </button>
+        )}
+        <span className="text-xs text-zinc-600 self-center ml-auto">
+          {filtered.length}/{entries.length}건
+        </span>
+      </div>
+
       {/* Log feed */}
       <Card className="bg-zinc-900 border-zinc-800">
         <CardContent className="p-0">
           {loading && entries.length === 0 ? (
             <div className="p-8 text-center text-zinc-600">로그를 불러오는 중...</div>
-          ) : entries.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-zinc-600">
-              해당 기간에 이벤트가 없습니다
+              {entries.length === 0
+                ? "해당 기간에 이벤트가 없습니다"
+                : "검색 결과가 없습니다"}
             </div>
           ) : (
             <div className="divide-y divide-zinc-800 max-h-[600px] overflow-y-auto">
-              {entries.map((entry, i) => (
+              {filtered.map((entry, i) => (
                 <div key={`${entry.timestamp}-${i}`} className="flex items-start gap-3 px-4 py-2.5">
                   <span className="text-xs text-zinc-600 font-mono whitespace-nowrap pt-0.5">
                     {formatTimestamp(entry.timestamp)}
